@@ -7,13 +7,14 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 )
 
-var RDB *redis.Client
+var RDB *redis.ClusterClient
 var RedisEnabled = true
 
 // InitRedisClient This function is called after init()
@@ -28,23 +29,30 @@ func InitRedisClient() (err error) {
 		SyncFrequency = 60
 	}
 	SysLog("Redis is enabled")
-	opt, err := redis.ParseURL(os.Getenv("REDIS_CONN_STRING"))
-	if err != nil {
-		FatalLog("failed to parse Redis connection string: " + err.Error())
+
+	// Parse cluster addresses from REDIS_CONN_STRING
+	// Format: redis://172.16.2.162:7000,172.16.2.167:7000,172.16.2.172:7000
+	addresses := strings.Split(strings.TrimPrefix(os.Getenv("REDIS_CONN_STRING"), "redis://"), ",")
+	if len(addresses) == 0 {
+		FatalLog("no Redis cluster addresses provided")
 	}
-	opt.PoolSize = GetEnvOrDefault("REDIS_POOL_SIZE", 10)
-	RDB = redis.NewClient(opt)
+
+	opt := &redis.ClusterOptions{
+		Addrs:    addresses,
+		PoolSize: GetEnvOrDefault("REDIS_POOL_SIZE", 10),
+	}
+
+	RDB = redis.NewClusterClient(opt)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	_, err = RDB.Ping(ctx).Result()
 	if err != nil {
-		FatalLog("Redis ping test failed: " + err.Error())
+		FatalLog("Redis cluster ping test failed: " + err.Error())
 	}
 	if DebugEnabled {
-		SysLog(fmt.Sprintf("Redis connected to %s", opt.Addr))
-		SysLog(fmt.Sprintf("Redis database: %d", opt.DB))
+		SysLog(fmt.Sprintf("Redis cluster connected to %v", addresses))
 	}
 	return err
 }

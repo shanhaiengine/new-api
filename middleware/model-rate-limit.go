@@ -19,7 +19,7 @@ const (
 )
 
 // 检查Redis中的请求限制
-func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, maxCount int, duration int64) (bool, error) {
+func checkRedisRateLimit(ctx context.Context, rdb redis.UniversalClient, key string, maxCount int, duration int64) (bool, error) {
 	// 如果maxCount为0，表示不限制
 	if maxCount == 0 {
 		return true, nil
@@ -59,7 +59,7 @@ func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, max
 }
 
 // 记录Redis请求
-func recordRedisRequest(ctx context.Context, rdb *redis.Client, key string, maxCount int) {
+func recordRedisRequest(ctx context.Context, rdb redis.UniversalClient, key string, maxCount int) {
 	// 如果maxCount为0，不记录请求
 	if maxCount == 0 {
 		return
@@ -88,6 +88,7 @@ func redisRateLimitHandler(duration int64, totalMaxCount, successMaxCount int) g
 		}
 		if !allowed {
 			abortWithOpenAiMessage(c, http.StatusTooManyRequests, fmt.Sprintf("您已达到总请求数限制：%d分钟内最多请求%d次，包括失败次数，请检查您的请求是否正确", setting.ModelRequestRateLimitDurationMinutes, totalMaxCount))
+			return
 		}
 
 		// 2. 检查成功请求数限制
